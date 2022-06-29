@@ -9,6 +9,7 @@ class Api::V1::Accounts::ArticlesController < Api::V1::Accounts::BaseController
 
   def create
     @article = @portal.articles.create!(article_params)
+    @article.draft!
   end
 
   def edit; end

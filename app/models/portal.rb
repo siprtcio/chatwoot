@@ -30,4 +30,6 @@ class Portal < ApplicationRecord
   validates :account_id, presence: true
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true
+
+  scope :active, -> { where(archived: false) }
 end
