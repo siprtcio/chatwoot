@@ -15,7 +15,6 @@ defaults: &defaults
     - image: cimg/postgres:14.1
     - image: cimg/redis:6.2.6
   environment:
-      - CC_TEST_REPORTER_ID: b1b5c4447bf93f6f0b06a64756e35afd0810ea83649f03971cbf303b4449456f
       - RAILS_LOG_TO_STDOUT: false
 jobs:
   build:
@@ -65,29 +64,6 @@ jobs:
           paths:
             - ~/.cache/yarn
 
-      - run:
-          name:  Download cc-test-reporter
-          command: |
-            mkdir -p ~/tmp
-            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ~/tmp/cc-test-reporter
-            chmod +x ~/tmp/cc-test-reporter
-      - persist_to_workspace:
-          root: ~/tmp
-          paths:
-            - cc-test-reporter
-
-      # verify swagger specification
-      - run:
-          name: Verify swagger API specification
-          command: |
-            bundle exec rake swagger:build
-            if [[ `git status swagger/swagger.json --porcelain` ]]
-            then
-              echo "ERROR: The swagger.json file is not in sync with the yaml specification. Run 'rake swagger:build' and commit 'swagger/swagger.json'."
-              exit 1
-            fi
-            curl -L https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/5.3.0/openapi-generator-cli-5.3.0.jar > ~/tmp/openapi-generator-cli-5.3.0.jar
-            java -jar ~/tmp/openapi-generator-cli-5.3.0.jar validate -i swagger/swagger.json
       # Database setup
       - run: yarn install --check-files
       - run: bundle exec rake db:create
@@ -101,46 +77,7 @@ jobs:
           name: Rubocop
           command: bundle exec rubocop
       
-      # - run:
-      #     name: Brakeman
-      #     command: bundle exec brakeman
-
       - run:
           name: eslint
           command: yarn run eslint
 
-      # Run rails tests
-      - run:
-          name: Run backend tests
-          command: |
-            bundle exec rspec $(circleci tests glob "spec/**/*_spec.rb" | circleci tests split --split-by=timings) --profile=10 --format documentation
-            ~/tmp/cc-test-reporter format-coverage -t simplecov -o ~/tmp/codeclimate.backend.json coverage/backend/.resultset.json
-      - persist_to_workspace:
-          root: ~/tmp
-          paths:
-            - codeclimate.backend.json
-
-      - run:
-          name: Run frontend tests
-          command: |
-            yarn test:coverage
-            ~/tmp/cc-test-reporter format-coverage -t lcov -o ~/tmp/codeclimate.frontend.json buildreports/lcov.info
-      - persist_to_workspace:
-          root: ~/tmp
-          paths:
-            - codeclimate.frontend.json
-
-      # collect reports
-      - store_test_results:
-          path: ~/tmp/test-results
-      - store_artifacts:
-          path: ~/tmp/test-results
-          destination: test-results
-      - store_artifacts:
-          path: log
-
-      - run:
-          name: Upload coverage results to Code Climate
-          command: |
-            ~/tmp/cc-test-reporter sum-coverage ~/tmp/codeclimate.*.json -p 2 -o ~/tmp/codeclimate.total.json
-            ~/tmp/cc-test-reporter upload-coverage -i ~/tmp/codeclimate.total.json
